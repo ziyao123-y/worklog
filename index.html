@@ -413,8 +413,6 @@ function parseText(text) {
   // 1. 提取手机号（11位，先去除空格再匹配）
   const phoneRaw = orig.match(/\d{11}/);
   const phone = phoneRaw ? phoneRaw[0] : '';
-  // 记录位置时用去除空格后的文本
-  let contentBase = orig;
   const phoneRange = phoneRaw ? { s: phoneRaw.index, e: phoneRaw.index + 11 } : null;
 
   // 2. 提取联系人（X总/X经理等），记录位置，只取第一个
@@ -485,8 +483,6 @@ function parseText(text) {
     name: document.getElementById('parseName').value,
     client, type, contact, position, phone, visit, method,
     content: content || orig
-  };
-}
   };
 }
 
