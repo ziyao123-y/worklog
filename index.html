@@ -405,33 +405,40 @@ function parseDate(str) {
 
 /* ========== 解析逻辑 ========== */
 function parseText(text) {
-  let content = text.trim();
+  const orig = text.trim();
 
-  // 1. 提取手机号（11位）
-  const phoneMatch = content.match(/(\d{11})/);
-  const phone = phoneMatch ? phoneMatch[1] : '';
-  if (phone) content = content.replace(phone, '').trim();
+  // 1. 提取手机号（11位数字），替换为占位符，不直接删除
+  let phone = '';
+  let content = orig.replace(/(\d{11})/, (m) => { phone = m; return '【手机】'; }).trim();
 
-  // 2. 提取联系人（X总、X经理、X老师、X负责人等），并从内容中移除
+  // 2. 提取联系人（X总、X经理、X老师等），替换占位符
   let contact = '';
-  const contactMatch = content.match(/([\u4e00-\u9fa5]{1,3}(?:总|经理|老师|负责人|合伙人|投行人))/);
-  if (contactMatch) {
-    contact = contactMatch[1];
-    content = content.replace(contact, '').trim();
-  }
+  content = content.replace(/([\u4e00-\u9fa5]{1,3}(?:总|经理|老师|负责人|合伙人|投行人))/g, (m) => {
+    if (!contact) contact = m;
+    return '【联系人】';
+  }).trim();
 
-  // 3. 判断沟通方式（根据原文中是否含关键词）
+  // 3. 判断沟通方式（基于原文）
   let method = '电话';
   let visit = '否';
-  const origLower = text.trim().toLowerCase();
-  if (origLower.includes('现场拜访')) {
-    method = '现场拜访';
-    visit = '是';
-  } else if (origLower.includes('微信')) {
+  if (orig.includes('现场拜访')) {
+    method = '现场拜访'; visit = '是';
+  } else if (orig.includes('微信')) {
     method = '微信';
   }
 
-  // 4. 提取客户名称（证券/会所/事务所/资产/公司等关键词前的一段）
+  // 4. 提取职位关键词（在原文中查找，优先匹配长词）
+  let position = '';
+  const posKeywords = [
+    '西南地区负责人', '对接事务所负责人', '项目负责人', '总经理', '合伙人',
+    '投行负责人', '审计负责人', '地区负责人', '机构负责人', '业务负责人',
+    '负责人', '合伙人', '投行', '审计', '经理'
+  ];
+  for (const kw of posKeywords) {
+    if (orig.includes(kw)) { position = kw; break; }
+  }
+
+  // 5. 提取客户名称（证券/会所/事务所/资产/公司等关键词）
   let client = '';
   const clientPatterns = [
     /([\u4e00-\u9fa5]+证券)/,
@@ -441,27 +448,24 @@ function parseText(text) {
     /([\u4e00-\u9fa5]+公司)/,
   ];
   for (const p of clientPatterns) {
-    const m = content.match(p);
+    const m = orig.match(p);
     if (m) { client = m[1]; break; }
   }
-  // 若未匹配到关键词，用前4个字作为客户名
   if (!client) {
-    const m = content.match(/^([\u4e00-\u9fa5]{2,4})/);
+    const m = orig.match(/^([\u4e00-\u9fa5]{2,4})/);
     if (m) client = m[1];
   }
 
-  // 5. 清理内容：去掉客户名开头，保留其余原文
-  let cleanContent = content;
-  if (client) cleanContent = cleanContent.replace(client, '').trim();
-  // 去掉职位关键词
-  const posKeywords = ['西南地区负责人', '合伙人', '总经理', '项目负责人', '对接事务所负责人', '负责人', '经理', '投行'];
-  for (const kw of posKeywords) {
-    cleanContent = cleanContent.replace(kw, '').trim();
-  }
-  // 去掉句首的连接词
-  cleanContent = cleanContent.replace(/^[，,、和与\s]+/, '').trim();
+  // 6. 生成干净的沟通内容：依次去掉手机、联系人、职位占位符
+  let clean = content
+    .replace(/【手机】/, '')
+    .replace(/【联系人】/, '')
+    .replace(position, '')
+    .replace(/^[，,、和与电话联系微信现场拜访\s]+/, '')
+    .replace(/^(和|与|沟通|联系)+/, '')
+    .trim();
 
-  // 6. 判断客户类型（关键字兜底，可手动修改）
+  // 7. 判断客户类型
   let type = '其他';
   if (client.includes('证券')) type = '券商';
   else if (client.includes('会所') || client.includes('事务所')) type = '审计';
@@ -475,11 +479,11 @@ function parseText(text) {
     client,
     type,
     contact,
-    position: '',
+    position,
     phone,
     visit,
     method,
-    content: cleanContent || content // 兜底保留原文
+    content: clean || orig // 兜底保留原文
   };
 }
 
