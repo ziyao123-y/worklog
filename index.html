@@ -403,31 +403,21 @@ function parseDate(str) {
   return null;
 }
 
-/* ========== 解析逻辑 ========== */
+/* ========== 解析逻辑（基于位置切除，不污染原文） ========== */
 function parseText(text) {
   const orig = text.trim();
 
-  // 1. 提取手机号（11位数字），替换为占位符，不直接删除
-  let phone = '';
-  let content = orig.replace(/(\d{11})/, (m) => { phone = m; return '【手机】'; }).trim();
+  // 1. 提取手机号（11位），记录起止位置
+  const phoneMatch = orig.match(/\d{11}/);
+  const phone = phoneMatch ? phoneMatch[0] : '';
+  const phoneRange = phoneMatch ? { s: phoneMatch.index, e: phoneMatch.index + phone.length } : null;
 
-  // 2. 提取联系人（X总、X经理、X老师等），只取第一个匹配，后续出现不再替换
-  let contact = '';
-  content = content.replace(/([\u4e00-\u9fa5]{1,3}(?:总|经理|老师|负责人|合伙人|投行人))/, (m) => {
-    contact = m;
-    return '【联系人】';
-  }).trim();
+  // 2. 提取联系人（X总/X经理等），记录位置，只取第一个
+  const contactMatch = orig.match(/([\u4e00-\u9fa5]{1,3}(?:总|经理|老师|负责人|合伙人|投行人))/);
+  const contact = contactMatch ? contactMatch[1] : '';
+  const contactRange = contactMatch ? { s: contactMatch.index, e: contactMatch.index + contact.length } : null;
 
-  // 3. 判断沟通方式（基于原文）
-  let method = '电话';
-  let visit = '否';
-  if (orig.includes('现场拜访')) {
-    method = '现场拜访'; visit = '是';
-  } else if (orig.includes('微信')) {
-    method = '微信';
-  }
-
-  // 4. 提取职位关键词（在原文中查找，优先匹配长词）
+  // 3. 职位关键词（优先长词匹配）
   let position = '';
   const posKeywords = [
     '西南地区负责人', '对接事务所负责人', '项目负责人', '总经理', '合伙人',
@@ -438,7 +428,7 @@ function parseText(text) {
     if (orig.includes(kw)) { position = kw; break; }
   }
 
-  // 5. 提取客户名称（证券/会所/事务所/资产/公司等关键词）
+  // 4. 客户名称（证券/会所/事务所/资产/公司等关键词）
   let client = '';
   const clientPatterns = [
     /([\u4e00-\u9fa5]+证券)/,
@@ -451,21 +441,25 @@ function parseText(text) {
     const m = orig.match(p);
     if (m) { client = m[1]; break; }
   }
-  if (!client) {
-    const m = orig.match(/^([\u4e00-\u9fa5]{2,4})/);
-    if (m) client = m[1];
+
+  // 5. 生成干净内容：从原文切除手机+联系人（从后往前切，防索引偏移），再清理职位和句首杂字
+  let content = orig;
+  const ranges = [phoneRange, contactRange].filter(Boolean).sort((a, b) => b.s - a.s);
+  for (const r of ranges) {
+    content = content.slice(0, r.s) + content.slice(r.e);
   }
+  if (position) content = content.replace(position, '');
+  if (client) content = content.replace(client, '');
+  content = content.replace(/^[^\u4e00-\u9fa5a-zA-Z0-9]+/, '').trim();
+  content = content.replace(/^(和|与|沟通|联系)+/, '').trim();
 
-  // 6. 生成干净的沟通内容：依次去掉手机、联系人、职位占位符
-  let clean = content
-    .replace(/【手机】/, '')
-    .replace(/【联系人】/, '')
-    .replace(position, '')
-    .replace(/^[，,、和与电话联系微信现场拜访\s]+/, '')
-    .replace(/^(和|与|沟通|联系)+/, '')
-    .trim();
+  // 6. 沟通方式（基于原文判断）
+  let method = '电话';
+  let visit = '否';
+  if (orig.includes('现场拜访')) { method = '现场拜访'; visit = '是'; }
+  else if (orig.includes('微信')) { method = '微信'; }
 
-  // 7. 判断客户类型
+  // 7. 客户类型
   let type = '其他';
   if (client.includes('证券')) type = '券商';
   else if (client.includes('会所') || client.includes('事务所')) type = '审计';
@@ -476,14 +470,8 @@ function parseText(text) {
     date: document.getElementById('logDate').value,
     branch: '贵州分公司',
     name: document.getElementById('parseName').value,
-    client,
-    type,
-    contact,
-    position,
-    phone,
-    visit,
-    method,
-    content: clean || orig // 兜底保留原文
+    client, type, contact, position, phone, visit, method,
+    content: content || orig
   };
 }
 
