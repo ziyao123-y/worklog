@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工作日志</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+    background: #f5f6f8;
+    padding: 20px;
+    color: #333;
+  }
+  .container { max-width: 1600px; margin: 0 auto; }
+  h1 {
+    font-size: 22px;
+    margin-bottom: 16px;
+    color: #2c5f2d;
+  }
+  .toolbar {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    align-items: center;
+  }
+  .toolbar input[type="date"] {
+    padding: 6px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 14px;
+  }
+  .toolbar button {
+    padding: 7px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 14px;
+    transition: opacity .2s;
+  }
+  .toolbar button:hover { opacity: .85; }
+  .btn-primary { background: #2c5f2d; color: #fff; }
+  .btn-secondary { background: #6c757d; color: #fff; }
+  .btn-export { background: #198754; color: #fff; }
+  .btn-danger { background: #dc3545; color: #fff; }
+
+  .parse-box {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 14px;
+    margin-bottom: 16px;
+  }
+  .parse-box label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 6px;
+    font-size: 14px;
+  }
+  .parse-box textarea {
+    width: 100%;
+    min-height: 60px;
+    padding: 8px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 14px;
+    resize: vertical;
+  }
+  .parse-box .hint {
+    font-size: 12px;
+    color: #888;
+    margin-top: 4px;
+  }
+
+  .table-wrap {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    overflow-x: auto;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    min-width: 1200px;
+  }
+  thead th {
+    background: #c6e0b4;
+    color: #2c5f2d;
+    padding: 10px 8px;
+    border: 1px solid #a9d18e;
+    text-align: center;
+    font-weight: bold;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+  tbody td {
+    border: 1px solid #d9d9d9;
+    padding: 6px 8px;
+    text-align: center;
+    vertical-align: middle;
+    background: #fff;
+  }
+  tbody tr:nth-child(even) td { background: #f9f9f9; }
+  tbody tr:hover td { background: #e8f5e9; }
+  td.editable {
+    cursor: text;
+    min-width: 80px;
+  }
+  td.editable:focus {
+    outline: 2px solid #2c5f2d;
+    background: #fffde7;
+  }
+  td.content-cell {
+    text-align: left;
+    min-width: 300px;
+    max-width: 500px;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  td .del-btn {
+    color: #dc3545;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+  td .del-btn:hover { background: #fce4e4; }
+
+  .empty-tip {
+    text-align: center;
+    padding: 40px;
+    color: #888;
+    font-size: 14px;
+  }
+
+  .archive-section {
+    margin-top: 20px;
+  }
+  .archive-section h2 {
+    font-size: 18px;
+    color: #2c5f2d;
+    margin-bottom: 10px;
+  }
+  .archive-list {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .archive-tag {
+    background: #e8f5e9;
+    color: #2c5f2d;
+    padding: 4px 12px;
+    border-radius: 14px;
+    font-size: 13px;
+    cursor: pointer;
+    border: 1px solid #a5d6a7;
+  }
+  .archive-tag:hover { background: #c8e6c9; }
+  .archive-tag.active { background: #2c5f2d; color: #fff; border-color: #2c5f2d; }
+
+  .modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,.4);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: #fff;
+    border-radius: 8px;
+    padding: 20px;
+    width: 90%;
+    max-width: 500px;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+  .modal h3 { margin-bottom: 12px; font-size: 16px; }
+  .modal-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+    align-items: center;
+  }
+  .modal-row label {
+    width: 90px;
+    font-size: 13px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+  .modal-row input, .modal-row select, .modal-row textarea {
+    flex: 1;
+    padding: 6px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 13px;
+  }
+  .modal-row textarea { min-height: 60px; resize: vertical; }
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 14px;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #333;
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-size: 14px;
+    z-index: 200;
+    opacity: 0;
+    transition: opacity .3s;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>📝 工作日志</h1>
+
+  <div class="toolbar">
+    <input type="date" id="logDate">
+    <button class="btn-primary" onclick="addEmptyRow()">➕ 添加空行</button>
+    <button class="btn-export" onclick="exportExcel()">📥 导出Excel</button>
+    <button class="btn-secondary" onclick="archiveWeek()">📦 归档本周</button>
+    <button class="btn-danger" onclick="clearAll()">🗑️ 清空当前</button>
+    <button class="btn-secondary" onclick="openSyncModal()" title="跨设备同步设置" style="margin-left:auto;">⚙️ 同步</button>
+  </div>
+
+  <div class="parse-box">
+    <label>🧠 自然语言解析（粘贴文本自动拆分）</label>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+      <label style="font-size:13px;font-weight:normal;width:auto;">姓名：</label>
+      <select id="parseName" style="padding:5px 8px;border:1px solid #ccc;border-radius:4px;font-family:inherit;font-size:13px;min-width:120px;">
+        <option value="龙洪伟">龙洪伟</option>
+        <option value="李艳杰">李艳杰</option>
+        <option value="杨雨虹">杨雨虹</option>
+        <option value="张娅">张娅</option>
+        <option value="张万锦">张万锦</option>
+        <option value="代强">代强</option>
+        <option value="聂中中">聂中中</option>
+        <option value="郝巍">郝巍</option>
+      </select>
+    </div>
+    <textarea id="parseInput" placeholder="例如：XX证券，XX部/xx负责人，XX总151XXXX2890，现场拜访/微信/电话，交流相关事宜。"></textarea>
+    <div class="hint">自动提取：手机号、X总/经理/老师等联系人、沟通方式。沟通内容默认保留原文，可手动修正。</div>
+    <div style="margin-top:8px;">
+      <button class="btn-primary" onclick="parseAndAdd()">✨ 解析并添加</button>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table id="logTable">
+      <thead>
+        <tr>
+          <th style="width:40px;">操作</th>
+          <th>日期</th>
+          <th>分公司</th>
+          <th>姓名</th>
+          <th>客户名称</th>
+          <th>客户类型</th>
+          <th>客户联系人</th>
+          <th>客户联系人职位</th>
+          <th>手机</th>
+          <th>现场拜访</th>
+          <th>沟通方式</th>
+          <th style="min-width:300px;">沟通内容</th>
+        </tr>
+      </thead>
+      <tbody id="logBody">
+        <tr class="empty-tip"><td colspan="12">暂无记录，请添加或解析数据</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="archive-section">
+    <h2>📁 历史归档</h2>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;" id="archiveList">
+      <span style="color:#888;font-size:13px;">暂无归档</span>
+    </div>
+  </div>
+</div>
+
+<!-- 编辑弹窗 -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <h3>编辑记录</h3>
+    <div class="modal-row"><label>日期</label><input type="date" id="m_date"></div>
+    <div class="modal-row"><label>分公司</label><input type="text" id="m_branch" placeholder="贵州分公司"></div>
+    <div class="modal-row"><label>姓名</label>
+      <select id="m_name">
+        <option value="龙洪伟">龙洪伟</option>
+        <option value="李艳杰">李艳杰</option>
+        <option value="杨雨虹">杨雨虹</option>
+        <option value="张娅">张娅</option>
+        <option value="张万锦">张万锦</option>
+        <option value="代强">代强</option>
+        <option value="聂中中">聂中中</option>
+        <option value="郝巍">郝巍</option>
+      </select>
+    </div>
+    <div class="modal-row"><label>客户名称</label><input type="text" id="m_client"></div>
+    <div class="modal-row"><label>客户类型</label>
+      <select id="m_type">
+        <option value="">--请选择--</option>
+        <option value="券商">券商</option>
+        <option value="审计">审计</option>
+        <option value="银行">银行</option>
+        <option value="发行人（城投）">发行人（城投）</option>
+        <option value="发行人（上市公司）">发行人（上市公司）</option>
+        <option value="发行人（其他）">发行人（其他）</option>
+        <option value="律师">律师</option>
+        <option value="其他">其他</option>
+      </select>
+    </div>
+    <div class="modal-row"><label>客户联系人</label><input type="text" id="m_contact"></div>
+    <div class="modal-row"><label>联系人职位</label><input type="text" id="m_position"></div>
+    <div class="modal-row"><label>手机</label><input type="text" id="m_phone"></div>
+    <div class="modal-row"><label>现场拜访</label>
+      <select id="m_visit">
+        <option value="否">否</option>
+        <option value="是">是</option>
+      </select>
+    </div>
+    <div class="modal-row"><label>沟通方式</label>
+      <select id="m_method">
+        <option value="电话">电话</option>
+        <option value="微信">微信</option>
+        <option value="现场拜访">现场拜访</option>
+        <option value="其他">其他</option>
+      </select>
+    </div>
+    <div class="modal-row"><label>沟通内容</label><textarea id="m_content"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal()">取消</button>
+      <button class="btn-primary" onclick="saveModal()">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- 同步设置弹窗 -->
+<div class="modal-overlay" id="syncModal">
+  <div class="modal">
+    <h3>跨设备同步设置</h3>
+    <div style="font-size:13px;color:#666;margin-bottom:14px;line-height:1.6;">
+      GitHub Gist 存储你的数据，实现手机/电脑实时同步。<br>
+      Token 仅本地存储，绝不上传。
+    </div>
+    <div class="modal-row"><label>GitHub Token</label><input type="password" id="s_token" placeholder="ghp_xxx..." style="font-size:12px;" value="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"></div>
+    <div class="modal-row"><label>Gist ID</label><input type="text" id="s_gist" placeholder="abc123def456" value="b9b0b28d714e7491eb846accf267f8cd"></div>
+    <div class="modal-row"><label>文件名</label><input type="text" id="s_file" value="worklog.json"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeSyncModal()">取消</button>
+      <button class="btn-primary" onclick="saveSyncConfig()">保存并同步</button>
+    </div>
+    <div id="syncStatus" style="margin-top:10px;font-size:13px;color:#888;"></div>
+  </div>
+</div>
+
+<script>
+/* ========== 数据存储（本地 + Gist同步） ========== */
+const STORAGE_KEY = 'worklog_data';
+const ARCHIVE_KEY = 'worklog_archive';
+const SYNC_KEY    = 'worklog_sync';   // {token, gist, file}
+let currentData = [];
+let editingIndex = -1;
+
+function getSyncConfig() {
+  const raw = localStorage.getItem(SYNC_KEY);
+  return raw ? JSON.parse(raw) : null;
+}
+
+function loadData() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (raw) currentData = JSON.parse(raw);
+  renderTable();
+  renderArchives();
+  const cfg = getSyncConfig();
+  if (cfg) syncLoad(cfg);
+}
+
+function saveData() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(currentData));
+  const cfg = getSyncConfig();
+  if (cfg) syncSave(cfg);
+}
+
+function getArchives() {
+  const raw = localStorage.getItem(ARCHIVE_KEY);
+  return raw ? JSON.parse(raw) : {};
+}
+
+function setArchives(obj) {
+  localStorage.setItem(ARCHIVE_KEY, JSON.stringify(obj));
+  const cfg = getSyncConfig();
+  if (cfg) syncSave(cfg);
+}
+
+/* ========== GitHub Gist 同步 ========== */
+function syncLoad(cfg) {
+  const statusEl = document.getElementById('syncStatus');
+  fetch(`https://api.github.com/gists/${cfg.gist}`, {
+    headers: { Authorization: `Bearer ${cfg.token}`, Accept: 'application/vnd.github+json' }
+  })
+    .then(r => r.json())
+    .then(data => {
+      const file = data.files[cfg.file];
+      if (!file) return;
+      const parsed = JSON.parse(file.content);
+      if (parsed.currentData) currentData = parsed.currentData;
+      if (parsed.archives) {
+        localStorage.setItem(ARCHIVE_KEY, JSON.stringify(parsed.archives));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(currentData));
+      }
+      renderTable();
+      renderArchives();
+      if (statusEl) statusEl.innerHTML = '<span style="color:#2c5f2d;">✓ 已从云端同步</span>';
+    })
+    .catch(() => { if (statusEl) statusEl.innerHTML = '<span style="color:#d33;">✗ 同步失败，请检查 Token 和 Gist ID</span>'; });
+}
+
+function syncSave(cfg) {
+  const payload = {
+    description: '工作日志同步数据',
+    files: {
+      [cfg.file]: {
+        content: JSON.stringify({
+          currentData: currentData,
+          archives:    getArchives()
+        }, null, 2)
+      }
+    }
+  };
+  fetch(`https://api.github.com/gists/${cfg.gist}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${cfg.token}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/vnd.github+json'
+    },
+    body: JSON.stringify(payload)
+  })
+    .then(r => r.json())
+    .then(data => {
+      const statusEl = document.getElementById('syncStatus');
+      if (statusEl) statusEl.innerHTML = '<span style="color:#2c5f2d;">✓ 已同步到云端</span>';
+    })
+    .catch(() => {});
+}
+
+function openSyncModal() {
+  const cfg = getSyncConfig() || {};
+  document.getElementById('s_token').value = cfg.token || '';
+  document.getElementById('s_gist').value  = cfg.gist  || '';
+  document.getElementById('s_file').value  = cfg.file  || 'worklog.json';
+  document.getElementById('syncStatus').innerHTML = '';
+  document.getElementById('syncModal').classList.add('show');
+}
+
+function closeSyncModal() {
+  document.getElementById('syncModal').classList.remove('show');
+}
+
+function saveSyncConfig() {
+  const token = document.getElementById('s_token').value.trim();
+  const gist  = document.getElementById('s_gist').value.trim();
+  const file  = document.getElementById('s_file').value.trim() || 'worklog.json';
+  if (!token || !gist) { showToast('请填写完整信息'); return; }
+  const cfg = { token, gist, file };
+  localStorage.setItem(SYNC_KEY, JSON.stringify(cfg));
+  showToast('同步设置已保存，正在同步…');
+  closeSyncModal();
+  syncLoad(cfg);
+  syncSave(cfg);
+}
+
+/* ========== 初始化 ========== */
+document.addEventListener('DOMContentLoaded', () => {
+  const today = new Date();
+  document.getElementById('logDate').value = formatDate(today);
+  loadData();
+});
+
+function formatDate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+function parseDate(str) {
+  if (!str) return null;
+  const m = str.match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+  if (m) return `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
+  const m2 = str.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (m2) return str;
+  return null;
+}
+
+/* ========== 解析逻辑（基于位置切除，不污染原文） ========== */
+function parseText(text) {
+  // 统一清理：合并换行/空白为单空格，去除手机号内部空格
+  const cleaned = text.replace(/[\r\n\t]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+  // 去除手机号内部的空格（如 "132 9641 6091" → "13296416091"）
+  const orig = cleaned.replace(/(\d)\s+(\d)/g, '$1$2').replace(/(\d)\s+(\d)/g, '$1$2').replace(/(\d)\s+(\d)/g, '$1$2');
+
+  // 1. 提取手机号（11位，先去除空格再匹配）
+  const phoneRaw = orig.match(/\d{11}/);
+  const phone = phoneRaw ? phoneRaw[0] : '';
+  const phoneRange = phoneRaw ? { s: phoneRaw.index, e: phoneRaw.index + 11 } : null;
+
+  // 2. 提取联系人（X总/X经理等），记录位置，只取第一个
+  const contactMatch = orig.match(/([\u4e00-\u9fa5]{1,3}(?:总|经理|老师|负责人|合伙人|投行人))/);
+  const contact = contactMatch ? contactMatch[1] : '';
+  const contactRange = contactMatch ? { s: contactMatch.index, e: contactMatch.index + contact.length } : null;
+
+  // 3. 职位提取：从联系人之后的文本中查找官职/部门关键词
+  let position = '';
+  const searchFrom = contactRange ? orig.slice(contactRange.e) : orig;
+  const posPriority = [
+    '西南地区负责人', '对接事务所负责人', '项目负责人', '融资部负责人',
+    '对接负责人', '战略客户关系管理部', '债融部', '融资部',
+    '副总经理', '副总', '总经理', '客户总监', '项目总监',
+    '渠道负责人', '投行董事', '投行负责人', '审计负责人',
+    '地区负责人', '机构负责人', '业务负责人', '负责人',
+    '合伙人', '项目经理', '经理'
+  ];
+  for (const kw of posPriority) {
+    if (searchFrom.includes(kw)) { position = kw; break; }
+  }
+
+  // 4. 客户名称（证券/会所/事务所/资产/公司等关键词）
+  let client = '';
+  const clientPatterns = [
+    /([\u4e00-\u9fa5]+证券)/,
+    /([\u4e00-\u9fa5]+会所)/,
+    /([\u4e00-\u9fa5]+事务所)/,
+    /([\u4e00-\u9fa5]+资产)/,
+    /([\u4e00-\u9fa5]+公司)/,
+  ];
+  for (const p of clientPatterns) {
+    const m = orig.match(p);
+    if (m) { client = m[1]; break; }
+  }
+
+  // 5. 生成干净内容：从原文切除手机+联系人，从后往前切防索引偏移
+  let content = orig;
+  const ranges = [phoneRange, contactRange].filter(Boolean).sort((a, b) => b.s - a.s);
+  for (const r of ranges) {
+    content = content.slice(0, r.s) + content.slice(r.e);
+  }
+  // 清理职位、客户名
+  if (position) content = content.replace(new RegExp(position.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '');
+  if (client) content = content.replace(new RegExp(client.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '');
+  // 清理句首标点和连接词（注意：保留电话联系/微信联系，不删除）
+  content = content.replace(/^[^\u4e00-\u9fa5a-zA-Z0-9]+/, '').trim();
+  content = content.replace(/^(和|与|沟通|联系)+/g, '').trim();
+  // 去掉内容中残留的"和X总/和X经理"句式，但保留"电话联系"/"微信联系"标记
+  content = content.replace(/和[\u4e00-\u9fa5]{1,3}(?:总|经理|老师)沟?通?/g, '').trim();
+  content = content.replace(/^(电话联系|微信联系|现场拜访)[，,、\s]*/g, '$1').trim();
+
+  // 6. 沟通方式（基于原文判断）
+  let method = '电话';
+  let visit = '否';
+  if (orig.includes('现场拜访')) { method = '现场拜访'; visit = '是'; }
+  else if (orig.includes('微信')) { method = '微信'; }
+
+  // 7. 客户类型
+  let type = '其他';
+  if (client.includes('证券')) type = '券商';
+  else if (client.includes('会所') || client.includes('事务所')) type = '审计';
+  else if (client.includes('银行')) type = '银行';
+  else if (client.includes('律所') || client.includes('律师')) type = '律师';
+
+  return {
+    date: document.getElementById('logDate').value,
+    branch: '贵州分公司',
+    name: document.getElementById('parseName').value,
+    client, type, contact, position, phone, visit, method,
+    content: content || orig
+  };
+}
+
+function parseAndAdd() {
+  const input = document.getElementById('parseInput').value.trim();
+  if (!input) { showToast('请输入要解析的文本'); return; }
+
+  // 按日期或星期分段（如 "4.27日"、"周一"、"周二"），支持一次性粘贴整月记录
+  const records = input.split(/(?=\d+\.\d+日|周[一二三四五六日])/);
+  let added = 0;
+  for (const rawRecord of records) {
+    const trimmed = rawRecord
+      .replace(/^\d+\.\d+日[：:\s]*/, '')
+      .replace(/^周[一二三四五六日][：:\s]*/, '')
+      .trim();
+    if (!trimmed) continue;
+    const parsed = parseText(trimmed);
+    if (parsed.client || parsed.contact || parsed.content) {
+      currentData.push(parsed);
+      added++;
+    }
+  }
+  if (added > 0) {
+    saveData();
+    renderTable();
+    document.getElementById('parseInput').value = '';
+    showToast(`成功添加 ${added} 条记录`);
+  } else {
+    showToast('未能解析出有效数据，请检查格式');
+  }
+}
+
+/* ========== 表格渲染 ========== */
+function renderTable() {
+  const tbody = document.getElementById('logBody');
+  if (currentData.length === 0) {
+    tbody.innerHTML = '<tr class="empty-tip"><td colspan="12">暂无记录，请添加或解析数据</td></tr>';
+    return;
+  }
+  tbody.innerHTML = currentData.map((row, i) => `
+    <tr data-index="${i}">
+      <td><span class="del-btn" onclick="deleteRow(${i})" title="删除">×</span></td>
+      <td class="editable" onclick="editCell(${i},'date')">${esc(row.date)}</td>
+      <td class="editable" onclick="editCell(${i},'branch')">${esc(row.branch)}</td>
+      <td class="editable" onclick="editCell(${i},'name')">${esc(row.name)}</td>
+      <td class="editable" onclick="editCell(${i},'client')">${esc(row.client)}</td>
+      <td class="editable" onclick="editCell(${i},'type')">${esc(row.type)}</td>
+      <td class="editable" onclick="editCell(${i},'contact')">${esc(row.contact)}</td>
+      <td class="editable" onclick="editCell(${i},'position')">${esc(row.position)}</td>
+      <td class="editable" onclick="editCell(${i},'phone')">${esc(row.phone)}</td>
+      <td class="editable" onclick="editCell(${i},'visit')">${esc(row.visit)}</td>
+      <td class="editable" onclick="editCell(${i},'method')">${esc(row.method)}</td>
+      <td class="editable content-cell" onclick="editCell(${i},'content')">${esc(row.content)}</td>
+    </tr>
+  `).join('');
+}
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* ========== 行内编辑 ========== */
+function editCell(index, field) {
+  editingIndex = index;
+  const row = currentData[index];
+  document.getElementById('m_date').value = row.date || '';
+  document.getElementById('m_branch').value = row.branch || '';
+  document.getElementById('m_name').value = row.name || '';
+  document.getElementById('m_client').value = row.client || '';
+  document.getElementById('m_type').value = row.type || '';
+  document.getElementById('m_contact').value = row.contact || '';
+  document.getElementById('m_position').value = row.position || '';
+  document.getElementById('m_phone').value = row.phone || '';
+  document.getElementById('m_visit').value = row.visit || '否';
+  document.getElementById('m_method').value = row.method || '电话';
+  document.getElementById('m_content').value = row.content || '';
+  document.getElementById('editModal').classList.add('show');
+}
+function closeModal() {
+  document.getElementById('editModal').classList.remove('show');
+  editingIndex = -1;
+}
+function saveModal() {
+  if (editingIndex < 0) return;
+  currentData[editingIndex] = {
+    date: document.getElementById('m_date').value,
+    branch: document.getElementById('m_branch').value,
+    name: document.getElementById('m_name').value,
+    client: document.getElementById('m_client').value,
+    type: document.getElementById('m_type').value,
+    contact: document.getElementById('m_contact').value,
+    position: document.getElementById('m_position').value,
+    phone: document.getElementById('m_phone').value,
+    visit: document.getElementById('m_visit').value,
+    method: document.getElementById('m_method').value,
+    content: document.getElementById('m_content').value,
+  };
+  saveData();
+  renderTable();
+  closeModal();
+  showToast('保存成功');
+}
+
+/* ========== 增删 ========== */
+function addEmptyRow() {
+  currentData.push({
+    date: document.getElementById('logDate').value,
+    branch: '贵州分公司',
+    name: document.getElementById('parseName').value,
+    client: '',
+    type: '',
+    contact: '',
+    position: '',
+    phone: '',
+    visit: '否',
+    method: '电话',
+    content: ''
+  });
+  saveData();
+  renderTable();
+  showToast('已添加空行');
+}
+function deleteRow(index) {
+  if (!confirm('确定删除这条记录吗？')) return;
+  currentData.splice(index, 1);
+  saveData();
+  renderTable();
+  showToast('已删除');
+}
+function clearAll() {
+  if (!confirm('确定清空所有当前记录吗？（可提前归档保存）')) return;
+  currentData = [];
+  saveData();
+  renderTable();
+  showToast('已清空');
+}
+
+/* ========== 归档 ========== */
+function getWeekKey(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  // 计算该日期所在周的周一
+  const day = d.getDay(); // 0=周日
+  const diff = day === 0 ? -6 : 1 - day; // 周一偏移
+  const monday = new Date(d);
+  monday.setDate(d.getDate() + diff);
+  const y = monday.getFullYear();
+  const m = String(monday.getMonth() + 1).padStart(2, '0');
+  const day2 = String(monday.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day2}周`;
+}
+
+function archiveWeek() {
+  if (currentData.length === 0) { showToast('当前无数据可归档'); return; }
+  const weekKeys = [...new Set(currentData.map(r => r.date ? getWeekKey(r.date) : null))].filter(Boolean);
+  const weekKey = weekKeys.length === 1 ? weekKeys[0] : getWeekKey(currentData[0].date);
+  const archives = getArchives();
+  if (!archives[weekKey]) archives[weekKey] = [];
+  archives[weekKey] = archives[weekKey].concat(currentData);
+  setArchives(archives);
+  currentData = [];
+  saveData();
+  renderTable();
+  renderArchives();
+  showToast(`已归档到 ${weekKey}`);
+}
+function renderArchives() {
+  const archives = getArchives();
+  const list = document.getElementById('archiveList');
+  const keys = Object.keys(archives).sort().reverse();
+  if (keys.length === 0) {
+    list.innerHTML = '<span style="color:#888;font-size:13px;">暂无归档</span>';
+    return;
+  }
+  list.innerHTML = keys.map(k => {
+    const count = archives[k].length;
+    return `<span class="archive-tag" onclick="loadArchive('${k}')">${k} (${count}条)</span>
+      <span class="del-btn" onclick="deleteArchive('${k}')" title="删除此归档" style="margin-left:-4px;cursor:pointer;color:#aaa;font-size:13px;padding:2px 4px;">×</span>`;
+  }).join('');
+}
+function deleteArchive(key) {
+  if (!confirm(`确定删除归档「${key}」吗？`)) return;
+  const archives = getArchives();
+  delete archives[key];
+  setArchives(archives);
+  renderArchives();
+  showToast('已删除归档');
+}
+function loadArchive(month) {
+  const archives = getArchives();
+  if (!archives[month]) return;
+  if (currentData.length > 0 && !confirm('当前有未保存数据，加载归档将覆盖，是否继续？')) return;
+  currentData = JSON.parse(JSON.stringify(archives[month]));
+  saveData();
+  renderTable();
+  showToast(`已加载 ${month} 归档数据`);
+}
+
+/* ========== Excel 导出（匹配模板格式） ========== */
+function exportExcel() {
+  if (currentData.length === 0) { showToast('无数据可导出'); return; }
+
+  const headers = ['日期','分公司','姓名','客户名称','客户类型','客户联系人','客户联系人职位','手机','现场拜访','沟通方式','沟通内容'];
+  const month   = currentData[0]?.date?.slice(0,7) || 'export';
+
+  const dataRows = currentData.map(r => [
+    r.date, r.branch, r.name, r.client, r.type,
+    r.contact, r.position, r.phone, r.visit, r.method, r.content
+  ]);
+
+  // 先建表（保证数据完整）
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
+
+  // 模板列宽（A-N，只用到前11列）
+  ws['!cols'] = [
+    {wch:16},{wch:19},{wch:12},{wch:16},{wch:20},
+    {wch:20},{wch:16},{wch:19},{wch:7},{wch:15},{wch:80}
+  ];
+
+  const fn = '微软雅黑', sz = 14;
+
+  // --- 表头行（row=0）---
+  for (let ci = 0; ci < headers.length; ci++) {
+    const addr = XLSX.utils.encode_cell({r: 0, c: ci});
+    if (!ws[addr]) continue;
+    ws[addr].s = {
+      font: { name: fn, sz: sz },
+      alignment: { horizontal: 'center', vertical: 'center', wrap_text: true },
+      border: {
+        top:    'thin',
+        left:   ci > 0 ? 'thin' : undefined,
+        right:  'thin',
+        bottom: undefined
+      }
+    };
+    // A列日期设数字格式
+    if (ci === 0) ws[addr].z = 'mm-dd-yy';
+  }
+
+  // --- 数据行（row=1起）---
+  for (let ri = 0; ri < dataRows.length; ri++) {
+    for (let ci = 0; ci < 11; ci++) {
+      const addr = XLSX.utils.encode_cell({r: ri + 1, c: ci});
+      if (!ws[addr]) continue;
+      // A列日期：居中+日期格式；K列（沟通内容）左对齐；其余居中
+      const isContent = (ci === 10); // N列（索引10=第11列，即K）
+      ws[addr].s = {
+        font: { name: fn, sz: sz },
+        alignment: {
+          horizontal: isContent ? 'left' : 'center',
+          vertical:   'center',
+          wrap_text:  true
+        }
+      };
+      if (ci === 0) ws[addr].z = 'mm-dd-yy';
+    }
+  }
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '工作日志');
+  XLSX.writeFile(wb, `工作日志_${month}.xlsx`);
+  showToast('Excel 导出成功');
+}
+
+/* ========== 工具 ========== */
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// 点击遮罩关闭弹窗
+document.getElementById('editModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('editModal')) closeModal();
+});
+document.getElementById('syncModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('syncModal')) closeSyncModal();
+});
+</script>
+</body>
+</html>
