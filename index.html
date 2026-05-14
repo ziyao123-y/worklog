@@ -458,11 +458,12 @@ function parseText(text) {
   // 清理职位、客户名
   if (position) content = content.replace(new RegExp(position.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '');
   if (client) content = content.replace(new RegExp(client.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '');
-  // 清理句首标点和连接词
+  // 清理句首标点和连接词（注意：保留电话联系/微信联系，不删除）
   content = content.replace(/^[^\u4e00-\u9fa5a-zA-Z0-9]+/, '').trim();
-  content = content.replace(/^(和|与|沟通|联系|电话|微信|现场拜访)+/g, '').trim();
-  // 去掉内容中残留的"和X总/和X经理"句式
+  content = content.replace(/^(和|与|沟通|联系)+/g, '').trim();
+  // 去掉内容中残留的"和X总/和X经理"句式，但保留"电话联系"/"微信联系"标记
   content = content.replace(/和[\u4e00-\u9fa5]{1,3}(?:总|经理|老师)沟?通?/g, '').trim();
+  content = content.replace(/^(电话联系|微信联系|现场拜访)[，,、\s]*/g, '$1').trim();
 
   // 6. 沟通方式（基于原文判断）
   let method = '电话';
@@ -490,17 +491,26 @@ function parseAndAdd() {
   const input = document.getElementById('parseInput').value.trim();
   if (!input) { showToast('请输入要解析的文本'); return; }
 
-  // 整段解析，不再按换行分割（避免拆分导致半条记录）
-  const parsed = parseText(input);
-  if (!parsed.client && !parsed.contact && !parsed.content) {
-    showToast('未能解析出有效数据，请检查格式');
-    return;
+  // 按日期行分段（如 "4.27日"、"4.28日"），支持一次性粘贴整月记录
+  const records = input.split(/(?=\d+\.\d+日)/);
+  let added = 0;
+  for (const rawRecord of records) {
+    const trimmed = rawRecord.replace(/^\d+\.\d+日[：:\s]*/, '').trim();
+    if (!trimmed) continue;
+    const parsed = parseText(trimmed);
+    if (parsed.client || parsed.contact || parsed.content) {
+      currentData.push(parsed);
+      added++;
+    }
   }
-  currentData.push(parsed);
-  saveData();
-  renderTable();
-  document.getElementById('parseInput').value = '';
-  showToast('添加成功');
+  if (added > 0) {
+    saveData();
+    renderTable();
+    document.getElementById('parseInput').value = '';
+    showToast(`成功添加 ${added} 条记录`);
+  } else {
+    showToast('未能解析出有效数据，请检查格式');
+  }
 }
 
 /* ========== 表格渲染 ========== */
