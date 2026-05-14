@@ -479,24 +479,17 @@ function parseAndAdd() {
   const input = document.getElementById('parseInput').value.trim();
   if (!input) { showToast('请输入要解析的文本'); return; }
 
-  // 支持多条，用换行分隔
-  const lines = input.split(/\n+/).filter(l => l.trim());
-  let added = 0;
-  for (const line of lines) {
-    const parsed = parseText(line.trim());
-    if (parsed.client || parsed.contact || parsed.content) {
-      currentData.push(parsed);
-      added++;
-    }
-  }
-  if (added > 0) {
-    saveData();
-    renderTable();
-    document.getElementById('parseInput').value = '';
-    showToast(`成功添加 ${added} 条记录`);
-  } else {
+  // 整段解析，不再按换行分割（避免拆分导致半条记录）
+  const parsed = parseText(input);
+  if (!parsed.client && !parsed.contact && !parsed.content) {
     showToast('未能解析出有效数据，请检查格式');
+    return;
   }
+  currentData.push(parsed);
+  saveData();
+  renderTable();
+  document.getElementById('parseInput').value = '';
+  showToast('添加成功');
 }
 
 /* ========== 表格渲染 ========== */
