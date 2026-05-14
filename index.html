@@ -405,7 +405,8 @@ function parseDate(str) {
 
 /* ========== 解析逻辑（基于位置切除，不污染原文） ========== */
 function parseText(text) {
-  const orig = text.trim();
+  // 开头统一清理：合并所有换行/空白为单空格，避免换行符干扰正则匹配
+  const orig = text.replace(/[\r\n\t]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
 
   // 1. 提取手机号（11位），记录起止位置
   const phoneMatch = orig.match(/\d{11}/);
