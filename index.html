@@ -528,10 +528,16 @@ function parseText(text) {
   const phone = phoneRaw ? phoneRaw[0] : '';
   const phoneRange = phoneRaw ? { s: phoneRaw.index, e: phoneRaw.index + 11 } : null;
 
-  // 2. 提取联系人（X总/X经理等），记录位置，只取第一个
-  const contactMatch = orig.match(/([\u4e00-\u9fa5]{1,3}(?:总|经理|老师|负责人|合伙人|投行人))/);
-  const contact = contactMatch ? contactMatch[1] : '';
-  const contactRange = contactMatch ? { s: contactMatch.index, e: contactMatch.index + contact.length } : null;
+  // 2. 提取联系人（优先X总/X经理等带后缀的，其次纯中文姓名）
+  const contactMatch = orig.match(/([\u4e00-\u9fa5]{1,4}(?:总|经理|老师|负责人|合伙人|投行人))/);
+  let contact = contactMatch ? contactMatch[1] : '';
+  // 若无后缀，尝试匹配纯中文姓名（2-4字，排除已匹配的后缀词）
+  let contactStart = contactMatch ? contactMatch.index : -1;
+  if (!contact) {
+    const plainName = orig.match(/([\u4e00-\u9fa5]{2,4})(?:总|经理|老师|负责人|合伙人|投行人|$|\s)/);
+    if (plainName) { contact = plainName[1]; contactStart = plainName.index; }
+  }
+  const contactRange = contact ? { s: contactStart, e: contactStart + contact.length } : null;
 
   // 3. 职位提取：从联系人之后的文本中查找官职/部门关键词
   let position = '';
@@ -604,13 +610,14 @@ function parseAndAdd() {
   const input = document.getElementById('parseInput').value.trim();
   if (!input) { showToast('请输入要解析的文本'); return; }
 
-  // 按日期或星期分段（如 "4.27日"、"周一"、"周二"），支持一次性粘贴整月记录
-  const records = input.split(/(?=\d+\.\d+日|周[一二三四五六日])/);
+  // 按日期/星期/数字编号分段，支持一次性粘贴整月记录
+  const records = input.split(/(?=\d+\.\d+日|周[一二三四五六日]|\d+[.、]\s*[\u4e00-\u9fa5])/);
   let added = 0;
   for (const rawRecord of records) {
     const trimmed = rawRecord
       .replace(/^\d+\.\d+日[：:\s]*/, '')
       .replace(/^周[一二三四五六日][：:\s]*/, '')
+      .replace(/^\d+[.、]\s*/, '')
       .trim();
     if (!trimmed) continue;
     const parsed = parseText(trimmed);
