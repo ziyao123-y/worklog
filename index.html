@@ -320,8 +320,13 @@
     <div class="modal-row"><label>客户类型</label>
       <select id="m_type">
         <option value="">--请选择--</option>
-        <option value="审计">审计</option>
         <option value="券商">券商</option>
+        <option value="审计">审计</option>
+        <option value="银行">银行</option>
+        <option value="发行人（城投）">发行人（城投）</option>
+        <option value="发行人（上市公司）">发行人（上市公司）</option>
+        <option value="发行人（其他）">发行人（其他）</option>
+        <option value="律师">律师</option>
         <option value="其他">其他</option>
       </select>
     </div>
@@ -456,10 +461,12 @@ function parseText(text) {
   // 去掉句首的连接词
   cleanContent = cleanContent.replace(/^[，,、和与\s]+/, '').trim();
 
-  // 6. 判断客户类型
+  // 6. 判断客户类型（关键字兜底，可手动修改）
   let type = '其他';
   if (client.includes('证券')) type = '券商';
   else if (client.includes('会所') || client.includes('事务所')) type = '审计';
+  else if (client.includes('银行')) type = '银行';
+  else if (client.includes('律所') || client.includes('律师')) type = '律师';
 
   return {
     date: document.getElementById('logDate').value,
