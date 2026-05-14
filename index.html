@@ -405,28 +405,36 @@ function parseDate(str) {
 
 /* ========== 解析逻辑（基于位置切除，不污染原文） ========== */
 function parseText(text) {
-  // 开头统一清理：合并所有换行/空白为单空格，避免换行符干扰正则匹配
-  const orig = text.replace(/[\r\n\t]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+  // 统一清理：合并换行/空白为单空格，去除手机号内部空格
+  const cleaned = text.replace(/[\r\n\t]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+  // 去除手机号内部的空格（如 "132 9641 6091" → "13296416091"）
+  const orig = cleaned.replace(/(\d)\s+(\d)/g, '$1$2').replace(/(\d)\s+(\d)/g, '$1$2').replace(/(\d)\s+(\d)/g, '$1$2');
 
-  // 1. 提取手机号（11位），记录起止位置
-  const phoneMatch = orig.match(/\d{11}/);
-  const phone = phoneMatch ? phoneMatch[0] : '';
-  const phoneRange = phoneMatch ? { s: phoneMatch.index, e: phoneMatch.index + phone.length } : null;
+  // 1. 提取手机号（11位，先去除空格再匹配）
+  const phoneRaw = orig.match(/\d{11}/);
+  const phone = phoneRaw ? phoneRaw[0] : '';
+  // 记录位置时用去除空格后的文本
+  let contentBase = orig;
+  const phoneRange = phoneRaw ? { s: phoneRaw.index, e: phoneRaw.index + 11 } : null;
 
   // 2. 提取联系人（X总/X经理等），记录位置，只取第一个
   const contactMatch = orig.match(/([\u4e00-\u9fa5]{1,3}(?:总|经理|老师|负责人|合伙人|投行人))/);
   const contact = contactMatch ? contactMatch[1] : '';
   const contactRange = contactMatch ? { s: contactMatch.index, e: contactMatch.index + contact.length } : null;
 
-  // 3. 职位关键词（优先长词匹配）
+  // 3. 职位提取：从联系人之后的文本中查找官职/部门关键词
   let position = '';
-  const posKeywords = [
-    '西南地区负责人', '对接事务所负责人', '项目负责人', '总经理', '合伙人',
-    '投行负责人', '审计负责人', '地区负责人', '机构负责人', '业务负责人',
-    '负责人', '合伙人', '投行', '审计', '经理'
+  const searchFrom = contactRange ? orig.slice(contactRange.e) : orig;
+  const posPriority = [
+    '西南地区负责人', '对接事务所负责人', '项目负责人', '融资部负责人',
+    '对接负责人', '战略客户关系管理部', '债融部', '融资部',
+    '副总经理', '副总', '总经理', '客户总监', '项目总监',
+    '渠道负责人', '投行董事', '投行负责人', '审计负责人',
+    '地区负责人', '机构负责人', '业务负责人', '负责人',
+    '合伙人', '项目经理', '经理'
   ];
-  for (const kw of posKeywords) {
-    if (orig.includes(kw)) { position = kw; break; }
+  for (const kw of posPriority) {
+    if (searchFrom.includes(kw)) { position = kw; break; }
   }
 
   // 4. 客户名称（证券/会所/事务所/资产/公司等关键词）
@@ -443,16 +451,20 @@ function parseText(text) {
     if (m) { client = m[1]; break; }
   }
 
-  // 5. 生成干净内容：从原文切除手机+联系人（从后往前切，防索引偏移），再清理职位和句首杂字
+  // 5. 生成干净内容：从原文切除手机+联系人，从后往前切防索引偏移
   let content = orig;
   const ranges = [phoneRange, contactRange].filter(Boolean).sort((a, b) => b.s - a.s);
   for (const r of ranges) {
     content = content.slice(0, r.s) + content.slice(r.e);
   }
-  if (position) content = content.replace(position, '');
-  if (client) content = content.replace(client, '');
+  // 清理职位、客户名
+  if (position) content = content.replace(new RegExp(position.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '');
+  if (client) content = content.replace(new RegExp(client.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '');
+  // 清理句首标点和连接词
   content = content.replace(/^[^\u4e00-\u9fa5a-zA-Z0-9]+/, '').trim();
-  content = content.replace(/^(和|与|沟通|联系)+/, '').trim();
+  content = content.replace(/^(和|与|沟通|联系|电话|微信|现场拜访)+/g, '').trim();
+  // 去掉内容中残留的"和X总/和X经理"句式
+  content = content.replace(/和[\u4e00-\u9fa5]{1,3}(?:总|经理|老师)沟?通?/g, '').trim();
 
   // 6. 沟通方式（基于原文判断）
   let method = '电话';
@@ -473,6 +485,8 @@ function parseText(text) {
     name: document.getElementById('parseName').value,
     client, type, contact, position, phone, visit, method,
     content: content || orig
+  };
+}
   };
 }
 
