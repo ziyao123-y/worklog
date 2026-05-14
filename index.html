@@ -529,46 +529,56 @@ function parseText(text) {
   const phoneRange = phoneRaw ? { s: phoneRaw.index, e: phoneRaw.index + 11 } : null;
 
   // 2. 提取联系人（优先X总/X经理等带后缀的，其次纯中文姓名）
-  const contactMatch = orig.match(/([\u4e00-\u9fa5]{1,4}(?:总|经理|老师|负责人|合伙人|投行人))/);
+  // 联系人一定在手机号之后，用负向前瞻排除"与/和/跟/同"开头
+  const phoneEnd = phoneRange ? phoneRange.e : 0;
+  const afterPhone = orig.slice(phoneEnd);
+  const contactMatch = afterPhone.match(/(?![\u4e00-\u9fa5]*(?:与|和|跟|同))([\u4e00-\u9fa5]{1,3}(?:总|经理|老师|负责人|合伙人|投行人))/);
   let contact = contactMatch ? contactMatch[1] : '';
-  // 若无后缀，尝试匹配纯中文姓名（2-4字，排除已匹配的后缀词）
-  let contactStart = contactMatch ? contactMatch.index : -1;
+  // 若无后缀，尝试匹配纯中文姓名（2-4字）
+  let contactStart = contactMatch ? phoneEnd + contactMatch.index : -1;
   if (!contact) {
-    const plainName = orig.match(/([\u4e00-\u9fa5]{2,4})(?:总|经理|老师|负责人|合伙人|投行人|$|\s)/);
-    if (plainName) { contact = plainName[1]; contactStart = plainName.index; }
+    const plainName = afterPhone.match(/([\u4e00-\u9fa5]{2,4})(?:总|经理|老师|负责人|合伙人|投行人|$|\s|[，、。；;])/);
+    if (plainName) { contact = plainName[1]; contactStart = phoneEnd + plainName.index; }
   }
   const contactRange = contact ? { s: contactStart, e: contactStart + contact.length } : null;
 
-  // 3. 职位提取：从联系人之后的文本中查找官职/部门关键词
+  // 3. 职位提取：在全文和联系人之后两处搜索，优先取联系人之前出现的（长词优先）
   let position = '';
-  const searchFrom = contactRange ? orig.slice(contactRange.e) : orig;
   const posPriority = [
     '西南地区负责人', '对接事务所负责人', '项目负责人', '融资部负责人',
     '对接负责人', '战略客户关系管理部', '债融部', '融资部',
-    '副总经理', '副总', '总经理', '客户总监', '项目总监',
-    '渠道负责人', '投行董事', '投行负责人', '审计负责人',
+    '总经理助理', '副总经理', '副总', '总经理', '客户总监', '项目总监',
+    '财务总监', '渠道负责人', '投行董事', '投行负责人', '审计负责人',
     '地区负责人', '机构负责人', '业务负责人', '负责人',
-    '合伙人', '项目经理', '经理'
+    '合伙人', '项目经理', '经理', '财务部', '机构部', '总监', '助理'
   ];
+  // 优先取联系人之前的职位（职位列表已按长度排序，长词优先）
   for (const kw of posPriority) {
-    if (searchFrom.includes(kw)) { position = kw; break; }
+    if (contactRange && contactRange.s > 0 && orig.slice(0, contactRange.s).includes(kw)) {
+      position = kw; break;
+    }
+  }
+  // 若联系人之前无职位，则取联系人之后的
+  if (!position) {
+    const searchFrom = contactRange ? orig.slice(contactRange.e) : orig;
+    for (const kw of posPriority) {
+      if (searchFrom.includes(kw)) { position = kw; break; }
+    }
   }
 
-  // 4. 客户名称（证券/会所/事务所/资产/公司等关键词）
+  // 4. 客户名称（证券/会所/事务所/资产/公司等关键词，从开头提取）
   let client = '';
   const clientPatterns = [
-    /([\u4e00-\u9fa5]+证券)/,
-    /([\u4e00-\u9fa5]+会所)/,
-    /([\u4e00-\u9fa5]+事务所)/,
-    /([\u4e00-\u9fa5]+资产)/,
-    /([\u4e00-\u9fa5]+公司)/,
+    /^([\u4e00-\u9fa5]+(?:证券|会所|事务所|资产运营|国投|银行|律所))/,
+    /^([\u4e00-\u9fa5]+(?:公司|分所|分公司|支行|经开))/,
+    /^([\u4e00-\u9fa5]+资本运营)/,
   ];
   for (const p of clientPatterns) {
     const m = orig.match(p);
     if (m) { client = m[1]; break; }
   }
 
-  // 5. 生成干净内容：从原文切除手机+联系人，从后往前切防索引偏移
+  // 5. 生成干净内容：从原文切除手机+联系人
   let content = orig;
   const ranges = [phoneRange, contactRange].filter(Boolean).sort((a, b) => b.s - a.s);
   for (const r of ranges) {
